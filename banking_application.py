@@ -1,19 +1,50 @@
 import hashlib
 import re
+import sqlite3
 import time
 
 from getpass import getpass
+from random import randint
 
+conn = sqlite3.connect("customers_information.db")
 
 
 def interface():
 
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS customer_database (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        balance NUMERIC NOT NULL,
+        account_number INTEGER NOT NULL UNIQUE
+    )
+    """)
+
+    def account_numbers():
+        #To create unique and random 8-digit numbers to act as account numbers for users
+        acct_num = randint(23456789, 98765432)
+        accct_nums = cursor.execute("""
+        SELECT account_number from customer_database;
+        """)
+        while True:
+            if acct_num in accct_nums:
+                acct_num = randint(23456789, 98765432)
+                continue
+            return acct_num
+
     def sign_up():
+        #Creating a sign up function to take in inputs of information from prospective user and put into a database 
+
         print("\nWelcome to the Sign Up page. Please fill in the form below and we will set up your account in no time!\n")
 
         time.sleep(0.5)
 
         while True:
+            #To take in user's fullname in the order of Surname, First Name and Middle Name.
             full_name = input("Please give us your Full Name in the following order (Surname First Name Middle Name): ").title().strip()
 
 
@@ -33,6 +64,7 @@ def interface():
             break
         
         while True:
+            #To take in user's Username
             username = input("\nCreate a Username: ").strip()
             pattern = r"^[a-zA-Z0-9_]+$"
 
@@ -51,6 +83,7 @@ def interface():
             break
 
         while True:
+            #To create a valid and strong password
             password = getpass("\nCreate your password: ").strip()
 
             if not password:
@@ -81,10 +114,12 @@ def interface():
                 continue
             break
 
+        #To hide the password even in the database.
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
         while True:
             try:
+                #To take in an initial deposit in order to activate user's account.
                 initial_deposit = float(input("\nPut in an initial deposit in order to activate your account. It must not be less than 2000: "))
             except ValueError or TypeError:
                 print("\nYou need to input a valid deposit in figures.")
@@ -98,7 +133,24 @@ def interface():
                     continue
                 balance = initial_deposit
             break
-        pass
+
+        try:
+            #To input the user's data into the database and check for errors.
+            cursor.execute("""
+            INSERT INTO customer_database (full_name, username, password, balance, account_number) VALUES
+            (?, ?, ?, ?, ?);
+            """, (full_name,username, hashed_password, balance, account_numbers()))
+        except sqlite3.IntegrityError:
+            print("A user with that username already exists.")
+            return None
+        else:
+            print("\nSign up successful")
+            data = cursor.execute("""
+            SELECT * from customer_database;
+            """).fetchall()
+            print(f"\n{data}")
+            # conn.commit()
+            # log_in()
 
     welcome_message = """
     Welcome to Demuirge Savings, your most trusted and secure bank in the region.
