@@ -139,18 +139,47 @@ def interface():
             cursor.execute("""
             INSERT INTO customer_database (full_name, username, password, balance, account_number) VALUES
             (?, ?, ?, ?, ?);
-            """, (full_name,username, hashed_password, balance, account_numbers()))
+            """, (full_name, username, hashed_password, balance, account_numbers()))
         except sqlite3.IntegrityError:
-            print("A user with that username already exists.")
+            print("\nA user with that username already exists.")
             return None
         else:
             print("\nSign up successful")
-            data = cursor.execute("""
-            SELECT * from customer_database;
-            """).fetchall()
-            print(f"\n{data}")
-            # conn.commit()
-            # log_in()
+            conn.commit()
+            log_in()
+    
+    def log_in():
+        #To log into using username and password as long as it exists in the database
+        print("\n Welcome customer to the Log in page. Please fill in your username and password.\n")
+        
+        while True:
+            #To validate the username and password
+            username = input("\nEnter your username: ").strip()
+            if not username:
+                print("\nField is required")
+                continue
+            
+            while True:
+                password = getpass("\nEnter your password: ").strip()
+                if not password:
+                    print("\nField is required")
+                    continue
+                break
+
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+
+            user = cursor.execute("""
+            SELECT * FROM customer_database WHERE username = ? AND password = ?;
+            """, (username, hashed_password)).fetchone()
+
+            if user is None:
+                print("\nInvalid username or password.")
+                continue
+            else:
+                time.sleep(1)
+                print("\nLog in Successful")
+                pass
 
     welcome_message = """
     Welcome to Demuirge Savings, your most trusted and secure bank in the region.
@@ -185,7 +214,7 @@ def interface():
         if choice == "1":
             sign_up()
         elif choice == "2":
-            pass
+            log_in()
 
 try:
     interface()
