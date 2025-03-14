@@ -10,6 +10,9 @@ To enter into the banking application using the username and password of the use
 ## Demuirge Savings class
 To perform basic bank operations
 
+## Transaction history function
+To record all transactions undertaken
+
 ## Bank Operations function
 To choose which bank operation to undertake
 

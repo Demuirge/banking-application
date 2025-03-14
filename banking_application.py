@@ -7,8 +7,18 @@ from datetime import datetime
 from getpass import getpass
 from random import randint
 
-conn = sqlite3.connect("customers_information.db")
+conn = sqlite3.connect("customers_information.db", detect_types=sqlite3.PARSE_DECLTYPES |sqlite3.PARSE_COLNAMES)
 cursor = conn.cursor()
+
+
+current = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+current = str(current)
+
+query = """
+        INSERT INTO transaction_history (account_number, transaction_description, amount, balance, date_time) VALUES
+        (?, ?, ?, ?, ?);
+        """
 
 def catch_error(amount):
     while True:
@@ -39,6 +49,22 @@ class BankAccount:
 
     def deposit(self):
         # To make a deposit
+        account_self = cursor.execute("""
+        SELECT account_number FROM customer_database WHERE username = ?;
+        """, (self.username,)).fetchone()
+
+        for num in account_self:
+            num = num
+        
+        full_name = cursor.execute("""
+        SELECT full_name FROM customer_database WHERE username = ?;
+        """, (self.username,)).fetchone()
+
+        for name in full_name:
+            name = name
+        
+        description = f"Deposit to {name}({num})"
+
         while True:
             try:
                 amount = float(input("\nHow much would you like to deposit? "))
@@ -73,7 +99,7 @@ class BankAccount:
 
         conn.commit()
 
-        time.sleep(1)
+        time.sleep(3)
         print("\ndeposit successful")
 
 
@@ -83,7 +109,12 @@ class BankAccount:
 
         for cash in balance:
             print(f"\nYour available balance is now {cash} naira.")
-        time.sleep(1)
+        
+        cursor.execute(query, (num, description, amount, cash, current))
+
+        conn.commit()
+
+        time.sleep(3)
 
     def withdrawal(self):
         # To make a waithdrawal
@@ -92,6 +123,23 @@ class BankAccount:
         """, (self.username,)).fetchone()
         for cash in balance:
             cash = cash
+        
+        account_self = cursor.execute("""
+        SELECT account_number FROM customer_database WHERE username = ?;
+        """, (self.username,)).fetchone()
+
+        for num in account_self:
+            num = num
+        
+        full_name = cursor.execute("""
+        SELECT full_name FROM customer_database WHERE username = ?;
+        """, (self.username,)).fetchone()
+
+        for name in full_name:
+            name = name
+        
+        description = f"Withdrawal from {name}({num})"
+
         while True:
             try:
                 amount = float(input("\nHow much would you like to withdraw? "))
@@ -124,7 +172,7 @@ class BankAccount:
 
         conn.commit()
 
-        time.sleep(1)
+        time.sleep(3)
         print("\nwithdrawal successful")
 
 
@@ -134,13 +182,30 @@ class BankAccount:
 
         for cash in balance:
             print(f"\nYour available balance is now {cash} naira.")
-        time.sleep(1)
+        
+        cursor.execute(query, (num, description, amount, cash, current))
+
+        conn.commit()
+
+        time.sleep(3)
     
     def transfer(self):
         # To transfer to another account
         account_self = cursor.execute("""
         SELECT account_number FROM customer_database WHERE username = ?;
         """, (self.username,)).fetchone()
+
+        for num in account_self:
+            num = num
+        
+        full_name = cursor.execute("""
+        SELECT full_name FROM customer_database WHERE username = ?;
+        """, (self.username,)).fetchone()
+
+        for name in full_name:
+            name = name
+        
+        description = f"Transfer from {name}({num})"
 
         while True:
             try:
@@ -196,12 +261,25 @@ class BankAccount:
                         continue
                     cash -= amount
             break
+        
+        full_name2 = cursor.execute("""
+        SELECT full_name FROM customer_database WHERE account_number = ?;
+        """, (account_target,)).fetchone()
+
+        for name2 in full_name2:
+            name2 = name2
+        
+        description2 = f"Transfer to {name2}({account_target})"
 
         cursor.execute("""
         UPDATE customer_database
         SET balance = ?
         WHERE username = ?;
         """, (cash, self.username))
+
+        conn.commit()
+
+        cursor.execute(query, (num, description, amount, cash, current))
 
         conn.commit()
 
@@ -216,7 +294,11 @@ class BankAccount:
 
         conn.commit()
 
-        time.sleep(1)
+        cursor.execute(query, (account_target, description2, amount, cash, current))
+
+        conn.commit()
+
+        time.sleep(3)
         print("\ntransfer successful")
 
         balance = cursor.execute("""
@@ -225,7 +307,7 @@ class BankAccount:
 
         for cash in balance:
             print(f"\nYour available balance is now {cash} naira.")
-        time.sleep(1)
+        time.sleep(3)
     
     def inquiry(self):
         # To check one's balance
@@ -270,7 +352,41 @@ USERNAME : {user}
 ACCOUNT NUMBER : {acct_num}
 """
         print(account_details)
-        time.sleep(1)
+        time.sleep(3)
+
+    def transaction_history(self):
+
+        print("\nBringing up your transaction history, please wait.")
+        time.sleep(2)
+
+        account_self = cursor.execute("""
+        SELECT account_number FROM customer_database WHERE username = ?;
+        """, (self.username,)).fetchone()
+
+        for account_num in account_self:
+            account_num = account_num
+
+        histories = cursor.execute("""
+        SELECT transaction_description, amount, balance, date_time FROM transaction_history WHERE account_number = ?;
+        """, (account_num,)).fetchall()
+
+        check = cursor.execute(" SELECT * FROM transaction_history;").fetchall()
+
+        if histories is None:
+            print("\nNo Transaction History.")
+            time.sleep(3)
+        elif not histories:
+            print("No Transaction History")
+            time.sleep(3)
+        elif not check:
+            print("\nNo Transaction History.")
+            time.sleep(3)
+        else:
+            print("\n           Transaction History\n")
+            for history in histories:
+                history = list(history)
+                print(f"{history[0]} || ₦{history[1]:.2f} || ₦{history[2]:.2f} || {history[3]}")
+            time.sleep(3)
 
 
 
@@ -284,6 +400,8 @@ ACCOUNT NUMBER : {acct_num}
 
 def interface():
 
+    cursor.execute(" PRAGMA foreign_keys = ON")
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS customer_database (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -294,6 +412,19 @@ def interface():
         account_number INTEGER NOT NULL UNIQUE
     )
     """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS transaction_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_number INTEGER NOT NULL,
+        transaction_description TEXT NOT NULL,
+        amount FLOAT NOT NULL,
+        balance NUMERIC NOT NULL,
+        date_time TEXT NOT NULL,
+        FOREIGN KEY(account_number) REFERENCES customer_database(account_number)
+    )
+    """)
+    
 
     def account_numbers():
         #To create unique and random 8-digit numbers to act as account numbers for users
@@ -459,7 +590,7 @@ def interface():
         print("\nYou are now logged in")
         time.sleep(1)
         demuirge = BankAccount(username)
-        menu = """
+        menu2 = """
     1. Deposit
     2. Withdrawal
     3. Transfer
@@ -469,7 +600,7 @@ def interface():
     7. Log out
     """
         while True:
-            print(menu)
+            print(menu2)
             time.sleep(1)
             choice = input("Choose the number from the options above the action you wish to take: ").strip()
 
@@ -500,7 +631,7 @@ def interface():
                 demuirge.details()
             elif choice == "6":
                 time.sleep(1)
-                pass
+                demuirge.transaction_history()
 
     welcome_message = """
     Welcome to Demuirge Savings, your most trusted and secure bank in the region.
