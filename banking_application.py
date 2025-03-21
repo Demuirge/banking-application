@@ -63,7 +63,7 @@ class BankAccount:
         for name in full_name:
             name = name
         
-        description = f"Deposit to {name}({num})"
+        description = f"Deposit by {name}({num})"
 
         while True:
             try:
@@ -138,7 +138,7 @@ class BankAccount:
         for name in full_name:
             name = name
         
-        description = f"Withdrawal from {name}({num})"
+        description = f"Withdrawal by {name}({num})"
 
         while True:
             try:
@@ -205,7 +205,6 @@ class BankAccount:
         for name in full_name:
             name = name
         
-        description = f"Transfer from {name}({num})"
 
         while True:
             try:
@@ -269,7 +268,8 @@ class BankAccount:
         for name2 in full_name2:
             name2 = name2
         
-        description2 = f"Transfer to {name2}({account_target})"
+        description = f"Transfer to {name2}({account_target})"
+        description2 = f"Transfer from {name}({num})"
 
         cursor.execute("""
         UPDATE customer_database
@@ -355,7 +355,7 @@ ACCOUNT NUMBER : {acct_num}
         time.sleep(3)
 
     def transaction_history(self):
-
+        # To create a Transaction history table holding all the transactions of the user
         print("\nBringing up your transaction history, please wait.")
         time.sleep(2)
 
@@ -372,10 +372,7 @@ ACCOUNT NUMBER : {acct_num}
 
         check = cursor.execute(" SELECT * FROM transaction_history;").fetchall()
 
-        if histories is None:
-            print("\nNo Transaction History.")
-            time.sleep(3)
-        elif not histories:
+        if not histories:
             print("No Transaction History")
             time.sleep(3)
         elif not check:
@@ -383,9 +380,26 @@ ACCOUNT NUMBER : {acct_num}
             time.sleep(3)
         else:
             print("\n           Transaction History\n")
+            header = ["Transaction Description", "Credit", "Debit", "Available Balance", "Transaction Period"]  # Header for the Transaction history table
+            print(f"{header[0]:<60} || {header[1]:<15} || {header[2]:<15} || {header[3]:<20} || {header[4]:<20}")
+            print("=" * 150)
             for history in histories:
-                history = list(history)
-                print(f"{history[0]} || ₦{history[1]:.2f} || ₦{history[2]:.2f} || {history[3]}")
+                credit = " " * 15
+                debit = " " * 15
+                h2 = f"₦{history[2]:.2f}"
+                if "Deposit" in history[0] or "deposit" in history[0]:
+                    # This means an increase in the balance of the user, hence a credit
+                    credit = f"\033[32m₦{history[1]:.2f}\033[0m" + " "*7
+                elif "Withdrawal" in history[0]:
+                    # This means a decrease in the balance of the user, hence a debit
+                    debit = f"\033[31m₦{history[1]:.2f}\033[0m" + " "*7
+                elif "Transfer" in history[0] and "from" in history[0]:
+                    # This means an increase in the balance of the user, hence a credit
+                    credit = f"\033[32m₦{history[1]:.2f}\033[0m" + " "*7
+                elif "Transfer" in history[0] and "to" in history[0]:
+                    # This means a decrease in the balance of the user, hence a debit
+                    debit = f"\033[31m₦{history[1]:.2f}\033[0m" + " "*7
+                print(f"{history[0]:<60} || {credit:<15} || {debit:<15} || {h2:<20} || {history[3]:<20}") # The rows of the table
             time.sleep(3)
 
 
@@ -400,7 +414,7 @@ ACCOUNT NUMBER : {acct_num}
 
 def interface():
 
-    cursor.execute(" PRAGMA foreign_keys = ON")
+    cursor.execute(" PRAGMA foreign_keys = ON") #To activate Foreign Key
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS customer_database (
@@ -546,8 +560,23 @@ def interface():
             print("\nA user with that username already exists.")
             return None
         else:
+            time.sleep(2)
             print("\nSign up successful")
             conn.commit()
+
+            account_number = cursor.execute("""
+            SELECT account_number FROM customer_database WHERE username = ?;
+            """, (username,)).fetchone()
+
+            for num in account_number:
+                num = num
+            
+            description = "Initial deposit"
+
+            cursor.execute(query, (num, description, balance, balance, current))
+            conn.commit()
+
+            time.sleep(2)
             log_in()
     
     def log_in():
@@ -588,6 +617,8 @@ def interface():
     def bank_operations(username):
         # To select which bank operation you would ike to undertake
         print("\nYou are now logged in")
+        time.sleep(1)
+        print(f"\nWelcome {username}")
         time.sleep(1)
         demuirge = BankAccount(username)
         menu2 = """
