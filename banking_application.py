@@ -11,34 +11,47 @@ conn = sqlite3.connect("customers_information.db", detect_types=sqlite3.PARSE_DE
 cursor = conn.cursor()
 
 
-current = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+ansi_escape = re.compile(r'\033\[[0-9;]*m')
 
-current = str(current)
 
-query = """
-        INSERT INTO transaction_history (account_number, transaction_description, amount, balance, date_time) VALUES
-        (?, ?, ?, ?, ?);
-        """
+def visible_length(text):
+    """Returns the visible length of a string after removing ANSI escape codes."""
+    return len(ansi_escape.sub('', text))
 
-def catch_error(amount):
+def insert_into_transaction_history(account_number,transaction_description,amount,balance):
+    try:
+        cursor.execute("""
+                INSERT INTO transaction_history (account_number, transaction_description, amount, balance) VALUES
+                (?, ?, ?, ?);
+                """,(account_number,transaction_description, amount, balance))
+    except Exception as e:
+        print(e)
+
+def amount_validation(operation):
     while True:
         try:
-            amount
-        except ValueError or TypeError:
-            print("Invalid input. The amount needs to be in figures.")
-            continue
-        except Exception as e:
-            print(f"Some error occured, {e}, please try again.")
-            continue
-        else:
+            amount = float(input(f"\nHow much would you like to {operation}? ").strip())
             if not amount:
-                print("Input field cannot be empty")
+                print("\nInput field cannot be empty")
                 continue
             elif amount < 0:
-                print("Amount cannot be negative")
+                print("\nAmount cannot be negative")
                 continue
-            else:
-                break
+        except (ValueError, TypeError):
+            print("\nInvalid input. The amount needs to be in figures.")
+            continue
+        except Exception as e:
+            print(f"\nSome error occured, {e}, please try again.")
+            continue
+        else:
+            return amount
+
+def balance_statement(username):
+    balance = cursor.execute("""
+    SELECT balance FROM customer_database WHERE username = ?;
+    """, (username,)).fetchone()[0]
+
+    print(f"\nYour available balance is now {balance} naira.")
 
 class BankAccount:
     def __init__(self, username):
@@ -51,263 +64,184 @@ class BankAccount:
         # To make a deposit
         account_self = cursor.execute("""
         SELECT account_number FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for num in account_self:
-            num = num
+        """, (self.username,)).fetchone()[0]
         
         full_name = cursor.execute("""
         SELECT full_name FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for name in full_name:
-            name = name
+        """, (self.username,)).fetchone()[0]
         
-        description = f"Deposit by {name}({num})"
+        description = f"Deposit by {full_name}({account_self})"
 
-        while True:
-            try:
-                amount = float(input("\nHow much would you like to deposit? "))
-            except ValueError or TypeError:
-                # To catch wrong inputs
-                print("\nInvalid input. The amount needs to be in figures.")
-                continue
-            except Exception as e:
-                print(f"\nSome error occured, {e}, please try again.")
-                continue
-            else:
-                if not amount:
-                    print("\nInput field cannot be empty")
-                    continue
-                elif amount < 0:
-                    print("\nAmount cannot be negative")
-                    continue
-            break
+        amount = amount_validation("deposit")
 
         balance = cursor.execute("""
         SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
+        """, (self.username,)).fetchone()[0]
 
-        for cash in balance:
-            cash += amount
+        balance += amount
         
         cursor.execute("""
         UPDATE customer_database
         SET balance = ?
         WHERE username = ?;
-        """, (cash, self.username))
+        """, (balance, self.username))
 
         conn.commit()
 
         time.sleep(3)
-        print("\ndeposit successful")
+        print("\nDeposit successful")
 
-
-        balance = cursor.execute("""
-        SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for cash in balance:
-            print(f"\nYour available balance is now {cash} naira.")
+        balance_statement(self.username)
         
-        cursor.execute(query, (num, description, amount, cash, current))
+        insert_into_transaction_history(account_self, description, amount, balance)
 
         conn.commit()
 
-        time.sleep(3)
+        time.sleep(1)
 
     def withdrawal(self):
         # To make a waithdrawal
         balance = cursor.execute("""
         SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-        for cash in balance:
-            cash = cash
+        """, (self.username,)).fetchone()[0]
         
         account_self = cursor.execute("""
         SELECT account_number FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for num in account_self:
-            num = num
+        """, (self.username,)).fetchone()[0]
         
         full_name = cursor.execute("""
         SELECT full_name FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
+        """, (self.username,)).fetchone()[0]
 
-        for name in full_name:
-            name = name
         
-        description = f"Withdrawal by {name}({num})"
+        description = f"Withdrawal by {full_name}({account_self})"
 
         while True:
-            try:
-                amount = float(input("\nHow much would you like to withdraw? "))
-            except ValueError or TypeError:
-                print("\nInvalid input. The amount needs to be in figures.")
+            amount = amount_validation("withdraw")
+            if amount > balance:
+                # To ensure more money than what is available cannot be withdrawn
+                print("\nSorry you cannot withdraw more than you have in savings.")
                 continue
-            except Exception as e:
-                print(f"\nSome error occured, {e}, please try again.")
-                continue
-            else:
-                if not amount:
-                    print("\nInput field cannot be empty")
-                    continue
-                elif amount < 0:
-                    print("\nAmount cannot be negative")
-                    continue
-                else: 
-                    if amount > cash:
-                        # To ensure more money than what is available cannot be withdrawn
-                        print("\nSorry you cannot withdraw more than you have in savings.")
-                        continue
-                    cash -= amount
+            balance -= amount
             break
 
         cursor.execute("""
         UPDATE customer_database
         SET balance = ?
         WHERE username = ?;
-        """, (cash, self.username))
+        """, (balance, self.username))
 
         conn.commit()
 
         time.sleep(3)
-        print("\nwithdrawal successful")
+        print("\nWithdrawal successful")
 
 
-        balance = cursor.execute("""
-        SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for cash in balance:
-            print(f"\nYour available balance is now {cash} naira.")
+        balance_statement(self.username)
         
-        cursor.execute(query, (num, description, amount, cash, current))
+        insert_into_transaction_history(account_self, description, amount, balance)
 
         conn.commit()
 
-        time.sleep(3)
+        time.sleep(1)
     
     def transfer(self):
         # To transfer to another account
         account_self = cursor.execute("""
         SELECT account_number FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for num in account_self:
-            num = num
+        """, (self.username,)).fetchone()[0]
         
         full_name = cursor.execute("""
         SELECT full_name FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for name in full_name:
-            name = name
+        """, (self.username,)).fetchone()[0]
         
-
         while True:
             try:
-                account_target = int(input("\nType the account number you would like to transfer to: "))
-            except ValueError or TypeError:
-                print("\nWe require a valid account number")
-                continue
-            except Exception as e:
-                print(f"\nSomething went wrong {e}, please try again.")
-                continue
-            else:
-                if not account_target:
-                    print("\nField cannot be empty or zero.")
+                account_target = int(input("\nType the account number you would like to transfer to(Press 108 t0 cancel transfer): ").strip())
+                if not(len(str(account_target)) == 8):
+                    print(f"\nWe require a valid account number")
                     continue
-                elif account_target in account_self:
+                elif account_target == account_self:
                     print("\nCannot transfer to oneself.")
                     continue
                 else:
                     balance_other = cursor.execute("""
                     SELECT balance FROM customer_database WHERE account_number = ?;
-                    """, (account_target,)).fetchone()
-                    if balance_other is None:
+                    """, (account_target,)).fetchone()[0]
+                    if not balance_other:
                         print("\nAccount number does not exist.")
                         continue
+            except (ValueError):
+                print("\nWe require a valid account number")
+                continue
+            except Exception as e:
+                print(f"\nSomething went wrong {e}, please try again.")
+                continue
             break
 
         balance = cursor.execute("""
         SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-        for cash in balance:
-            cash = cash
+        """, (self.username,)).fetchone()[0]
+
+        account_target_full_name = cursor.execute("""
+        SELECT full_name FROM customer_database WHERE account_number = ?;
+        """, (account_target,)).fetchone()[0]
 
         while True:
-            try:
-                amount = float(input("\nHow much would you like to transfer? "))
-            except ValueError or TypeError:
-                print("\nInvalid input. The amount needs to be in figures.")
-                continue
-            except Exception as e:
-                print(f"\nSome error occured, {e}, please try again.")
+            amount = amount_validation("transfer")
+            if amount > balance:
+                # To ensure more money than what is available cannot transferred
+                print("\nSorry you cannot transfer more than you have in savings.")
                 continue
             else:
-                if not amount:
-                    print("\nInput field cannot be empty")
-                    continue
-                elif amount < 0:
-                    print("\nAmount cannot be negative")
-                    continue
-                else:
-                    if amount > cash:
-                        # To ensure more money than what is available cannot be transferred
-                        print("\nSorry you cannot transfer more than you have in savings.")
+                while True:
+                    try:
+                        confirmation = input(f"\nYou are about to transfer ₦{amount} to {account_target_full_name}({account_target}). Are you sure you want to proceed(Yes/No)? ").lower().strip()
+                        if confirmation not in ("yes", "no"):
+                            print("\nAnswer with Yes or No")
+                            continue
+                        elif confirmation == "yes":
+                            balance -= amount
+                            balance_other += amount
+                            break
+                        elif confirmation == "no":
+                            print("\nCancelling Transfer")
+                            time.sleep(1)
+                            return
+                    except (ValueError, TypeError):
+                        print("\nYou have to confirm with a valid answer, Yes or No")
                         continue
-                    cash -= amount
-            break
+                    except Exception as e:
+                        print(f"\nSomething occured, {e}, please try again")
+                        continue
+                break        
         
-        full_name2 = cursor.execute("""
-        SELECT full_name FROM customer_database WHERE account_number = ?;
-        """, (account_target,)).fetchone()
-
-        for name2 in full_name2:
-            name2 = name2
-        
-        description = f"Transfer to {name2}({account_target})"
-        description2 = f"Transfer from {name}({num})"
+        description = f"Transfer to {account_target_full_name}({account_target})"
+        other_description = f"Transfer from {full_name}({account_self})"
 
         cursor.execute("""
         UPDATE customer_database
         SET balance = ?
         WHERE username = ?;
-        """, (cash, self.username))
+        """, (balance, self.username))
 
-        conn.commit()
-
-        cursor.execute(query, (num, description, amount, cash, current))
-
-        conn.commit()
-
-        for cash in balance_other:
-            cash += amount
+        insert_into_transaction_history(account_self, description, amount, balance)
         
         cursor.execute("""
         UPDATE customer_database
         SET balance = ?
         WHERE account_number = ?;
-        """, (cash, account_target))
+        """, (balance_other, account_target))
 
-        conn.commit()
-
-        cursor.execute(query, (account_target, description2, amount, cash, current))
+        insert_into_transaction_history(account_target, other_description, amount, balance_other)
 
         conn.commit()
 
         time.sleep(3)
         print("\ntransfer successful")
 
-        balance = cursor.execute("""
-        SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for cash in balance:
-            print(f"\nYour available balance is now {cash} naira.")
-        time.sleep(3)
+        balance_statement(self.username)
+        time.sleep(1)
     
     def inquiry(self):
         # To check one's balance
@@ -315,11 +249,7 @@ class BankAccount:
 
         time.sleep(2)
 
-        balance = cursor.execute("""
-        SELECT balance FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-        for cash in balance:
-            print(f"\nYour current available balance is {cash} naira.")
+        balance_statement(self.username)
         time.sleep(1)
 
     def details(self):
@@ -328,31 +258,19 @@ class BankAccount:
 
         time.sleep(2)
 
-        full_name = cursor.execute("""
-        SELECT full_name FROM customer_database WHERE username = ?;
+        details = cursor.execute("""
+        SELECT full_name, username, account_number FROM customer_database WHERE username = ?;
         """, (self.username,)).fetchone()
-        for name in full_name:
-            name = name
-        
-        username = cursor.execute("""
-        SELECT username FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-        for user in username:
-            user = user
-        
-        account_number = cursor.execute("""
-        SELECT account_number FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-        for acct_num in account_number:
-            acct_num = acct_num
+
+        full_name, username, account_number = details
         
         account_details = f"""
-FULL NAME : {name}
-USERNAME : {user}
-ACCOUNT NUMBER : {acct_num}
+FULL NAME : {full_name}
+USERNAME : {username}
+ACCOUNT NUMBER : {account_number}
 """
         print(account_details)
-        time.sleep(3)
+        time.sleep(1)
 
     def transaction_history(self):
         # To create a Transaction history table holding all the transactions of the user
@@ -361,22 +279,14 @@ ACCOUNT NUMBER : {acct_num}
 
         account_self = cursor.execute("""
         SELECT account_number FROM customer_database WHERE username = ?;
-        """, (self.username,)).fetchone()
-
-        for account_num in account_self:
-            account_num = account_num
+        """, (self.username,)).fetchone()[0]
 
         histories = cursor.execute("""
         SELECT transaction_description, amount, balance, date_time FROM transaction_history WHERE account_number = ?;
-        """, (account_num,)).fetchall()
-
-        check = cursor.execute(" SELECT * FROM transaction_history;").fetchall()
+        """, (account_self,)).fetchall()
 
         if not histories:
             print("No Transaction History")
-            time.sleep(3)
-        elif not check:
-            print("\nNo Transaction History.")
             time.sleep(3)
         else:
             print("\n           Transaction History\n")
@@ -384,37 +294,32 @@ ACCOUNT NUMBER : {acct_num}
             print(f"{header[0]:<60} || {header[1]:<15} || {header[2]:<15} || {header[3]:<20} || {header[4]:<20}")
             print("=" * 150)
             for history in histories:
-                credit = " " * 15
-                debit = " " * 15
+                credit = " "
+                debit = " "
                 h2 = f"₦{history[2]:.2f}"
                 if "Deposit" in history[0] or "deposit" in history[0]:
                     # This means an increase in the balance of the user, hence a credit
-                    credit = f"\033[32m₦{history[1]:.2f}\033[0m" + " "*7
+                    credit = f"\033[32m₦{history[1]:.2f}\033[0m"
                 elif "Withdrawal" in history[0]:
                     # This means a decrease in the balance of the user, hence a debit
-                    debit = f"\033[31m₦{history[1]:.2f}\033[0m" + " "*7
+                    debit = f"\033[31m₦{history[1]:.2f}\033[0m"
                 elif "Transfer" in history[0] and "from" in history[0]:
                     # This means an increase in the balance of the user, hence a credit
-                    credit = f"\033[32m₦{history[1]:.2f}\033[0m" + " "*7
+                    credit = f"\033[32m₦{history[1]:.2f}\033[0m"
                 elif "Transfer" in history[0] and "to" in history[0]:
                     # This means a decrease in the balance of the user, hence a debit
-                    debit = f"\033[31m₦{history[1]:.2f}\033[0m" + " "*7
-                print(f"{history[0]:<60} || {credit:<15} || {debit:<15} || {h2:<20} || {history[3]:<20}") # The rows of the table
+                    debit = f"\033[31m₦{history[1]:.2f}\033[0m"
+                    
+                credit_padding = 15 + (len(credit) - visible_length(credit))
+                debit_padding = 15 + (len(debit) - visible_length(debit))
+                print(f"{history[0]:<60} || {credit:<{credit_padding}} || {debit:<{debit_padding}} || {h2:<20} || {history[3]:<20}") # The rows of the table
             time.sleep(3)
-
-
-
-
-
-
-
-
-
 
 
 def interface():
 
     cursor.execute(" PRAGMA foreign_keys = ON") #To activate Foreign Key
+
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS customer_database (
@@ -434,23 +339,24 @@ def interface():
         transaction_description TEXT NOT NULL,
         amount FLOAT NOT NULL,
         balance NUMERIC NOT NULL,
-        date_time TEXT NOT NULL,
+        date_time TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(account_number) REFERENCES customer_database(account_number)
     )
     """)
     
 
-    def account_numbers():
+    def create_account_number():
+        print("hello")
         #To create unique and random 8-digit numbers to act as account numbers for users
-        acct_num = randint(23456789, 98765432)
-        accct_nums = cursor.execute("""
-        SELECT account_number from customer_database;
-        """)
         while True:
-            if acct_num in accct_nums:
-                acct_num = randint(23456789, 98765432)
-                continue
-            return acct_num
+            acct_num = randint(10000000, 99999999)
+            print(acct_num)
+            acct_nums = cursor.execute("""
+            SELECT account_number from customer_database WHERE account_number = ?;
+            """, (acct_num,)).fetchone()
+            print(acct_num)
+            if acct_nums is None:
+                return acct_num
 
     def sign_up():
         #Creating a sign up function to take in inputs of information from prospective user and put into a database 
@@ -471,7 +377,7 @@ def interface():
                 print("\nYour name has to be a minimum of 4 characters and maximum of 255\n")
                 continue
 
-            pattern = r"^[a-zA-Z]+\s[a-zA-Z]+\s[a-zA-Z]+$"
+            pattern = r"^[A-Za-z]{2,}\s[A-Za-z]{2,}(?:\s[A-Za-z]{2,})?$"
 
             if not re.match(pattern, full_name):
                 print("\nYour full name has to be written with no error\n")
@@ -537,7 +443,7 @@ def interface():
             try:
                 #To take in an initial deposit in order to activate user's account.
                 initial_deposit = float(input("\nPut in an initial deposit in order to activate your account. It must not be less than 2000: "))
-            except ValueError or TypeError:
+            except (ValueError, TypeError):
                 print("\nYou need to input a valid deposit in figures.")
                 continue
             else:
@@ -549,13 +455,17 @@ def interface():
                     continue
                 balance = initial_deposit
             break
+        
+        account_number = create_account_number()
 
         try:
+            print(f"account_number: {account_number}")
             #To input the user's data into the database and check for errors.
             cursor.execute("""
             INSERT INTO customer_database (full_name, username, password, balance, account_number) VALUES
             (?, ?, ?, ?, ?);
-            """, (full_name, username, hashed_password, balance, account_numbers()))
+            """, (full_name, username, hashed_password, balance, account_number))
+            print(f"account_number2: {account_number}")
         except sqlite3.IntegrityError:
             print("\nA user with that username already exists.")
             return None
@@ -566,14 +476,11 @@ def interface():
 
             account_number = cursor.execute("""
             SELECT account_number FROM customer_database WHERE username = ?;
-            """, (username,)).fetchone()
-
-            for num in account_number:
-                num = num
+            """, (username,)).fetchone()[0]
             
             description = "Initial deposit"
 
-            cursor.execute(query, (num, description, balance, balance, current))
+            insert_into_transaction_history(account_number, description, balance, balance)
             conn.commit()
 
             time.sleep(2)
@@ -668,7 +575,8 @@ def interface():
     Welcome to Demuirge Savings, your most trusted and secure bank in the region.
     We work with State-of-the-art technology and software to ensure your bank transacations are not only
     safe and secure, but also incredibly convenient to give you the best of experiences. We trust that you
-    will continue to patronise with us. Thank you in advance."""
+    will continue to patronise with us. Thank you in advance.
+    """
 
     menu = """
     1. Sign Up
@@ -703,5 +611,7 @@ try:
     interface()
 except KeyboardInterrupt:
     print("\n\nYou quit the application.")
-except Exception:
-    pass
+except Exception as e:
+    print(f"Something occured, {e}, please try again.")
+finally:
+    conn.close()
